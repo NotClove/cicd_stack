@@ -93,15 +93,6 @@ docker compose down -v     # остановить и удалить volume'ы
 docker login localhost:8082 -u admin -p admin123
 ```
 
-## Пример запуска пайплайнов
-
-1. В Jenkins → *New Item* → Pipeline → вставь любой Jenkinsfile из `../test/*/Jenkinsfile`.
-2. Выставь правильные credentials IDs:
-   - `sonarqube-token` (`Secret text`) — токен SonarQube.
-   - `nexus-credentials` (`Username with password`) — Nexus.
-
-3. Запусти build. Пайплайн: checkout → тесты → Sonar analysis → Quality Gate → build → Docker build/push.
-
 ## Обновление конфигурации
 
 - **Плагины**: редактируй `plugins.txt` и пересобирай Jenkins образ: `docker compose build jenkins && docker compose up -d jenkins`.
@@ -110,8 +101,6 @@ docker login localhost:8082 -u admin -p admin123
 
 ## Troubleshooting
 
-- **Jenkins не видит Docker** — убедись, что локальный пользователь в `docker` группе, а Docker Desktop запущен.
-- **Sonar Quality Gate висит** — проверь, что в Jenkins настроен SonarQube server с валидным токеном. Можно добавить небольшую задержку (`sleep 5s`) перед `waitForQualityGate`, если CE обрабатывает задачи дольше.
 - **Docker push в Nexus отдаёт 401** — включи в Nexus realm *Docker Bearer Token Realm* (Administration → Security → Realms) и перезапусти логин.
 - **Push по HTTP ругается на SSL** — добавь registry в `insecure-registries` (см. выше).
 
