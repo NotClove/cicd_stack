@@ -1,24 +1,24 @@
 # CI/CD Stack (Jenkins + SonarQube + Nexus)
 
-Готовый docker-compose стенд, который поднимает Jenkins с предустановленными плагинами и инструментами, SonarQube (c PostgreSQL) и Nexus Repository.
+Комплект инфраструктуры для локального развертывания Jenkins, SonarQube и Nexus Repository с помощью docker-compose. Решение подходит для демонстраций и быстрой проверки CI/CD пайплайнов.
 
 ## Состав
 
 | Сервис | Версия | Порт | Особенности |
 |-------|--------|------|-------------|
-| Jenkins | `jenkins/jenkins:2.528.2-lts-jdk21` | `8080`, агент `50000` | Плагины из `plugins.txt`, Maven+Gradle+Node+Python+Go+sonar-scanner, Wizard отключён, пользователь `admin/admin123`. Docker socket смонтирован, директория `../test` примонтирована в `/var/jenkins_home/test`. |
-| SonarQube | `25.11.0.114957-community` | `9000` | Работает с PostgreSQL 16 (контейнер `postgres`). Стандартный логин `admin/admin`. |
-| Nexus Repository 3 | `3.86.0` | `8081` (для Docker registry можно раскомментировать `8082`) | `NEXUS_SECURITY_RANDOMPASSWORD=false`, поэтому логин `admin/admin123`. Docker hosted репозиторий нужно создать руками. |
+| Jenkins | `jenkins/jenkins:2.528.2-lts-jdk21` | `8080`, агент `50000` | Плагины из `plugins.txt`, предустановлены Maven, Gradle, Node.js, Python, Go, sonar-scanner. Включена авторизация, пользователь `admin/admin123`. Docker socket смонтирован, директория `../test` примонтирована в `/var/jenkins_home/test`. |
+| SonarQube | `25.11.0.114957-community` | `9000` | Использует PostgreSQL 16, логин по умолчанию `admin/admin`. |
+| Nexus Repository 3 | `3.86.0` | `8081` (при необходимости включается `8082` под Docker registry) | Установлен фиксированный пароль `admin/admin123`. Docker hosted репозиторий настраивается вручную. |
 
 > DNS имена внутри compose: `jenkins`, `sonarqube`, `nexus`, `postgres`. Вне контейнеров используйте `localhost`.
 
 ## Требования
 
-- Docker Engine + docker compose plugin (или Docker Desktop 4.30+).
+- Docker Engine (или Docker Desktop 4.30+) с docker compose plugin.
 
-- ~8 GB RAM и 4 vCPU.
+- Минимум 4 vCPU и 8 GB RAM.
 
-- Для push Docker-образов в Nexus по HTTP добавьте в `/etc/docker/daemon.json` (или Docker Desktop → *Settings → Docker Engine*) секцию(при условии что создан docker registry(hosted) и он смотрит на отдельный порт 8082):
+- Для публикации образов в Nexus по HTTP необходимо добавить registry в `/etc/docker/daemon.json` (или Docker Desktop → *Settings → Docker Engine*) и перезапустить Docker:
 
 ```json
 {
@@ -29,18 +29,15 @@
 }
 ```
 
-После правки перезапустите Docker.
-
 ## Развёртывание
 
 ```bash
 git clone https://github.com/NotClove/cicd_stack.git && cd cicd_stack
 docker compose up -d
-# Проверяем статусы
 docker compose ps
 ```
 
-Первый старт займёт 2–3 мин (Nexus и SonarQube поднимаются дольше остальных). Логи:
+Первый старт занимает 2–3 минуты. Для диагностики используйте:
 
 ```bash
 docker compose logs -f jenkins
@@ -62,7 +59,7 @@ docker compose down -v     # остановить и удалить volume'ы
 | Jenkins | http://localhost:8080 | `admin` | `admin123` |
 | SonarQube | http://localhost:9000 | `admin` | `admin` |
 | Nexus | http://localhost:8081 | `admin` | `admin123` |
-| Docker Registry (Nexus) | http://localhost:8082 *(раскомментируйте порт в compose и настройте insecure registry)* | `admin` | `admin123` |
+| Docker Registry | http://localhost:8082 *(если порт включён и Docker настроен как insecure)* | `admin` | `admin123` |
 
 ### Jenkins
 
@@ -72,20 +69,20 @@ docker compose down -v     # остановить и удалить volume'ы
 - **Docker**: CLI установлен, сокет `/var/run/docker.sock` смонтирован, т.е. все сборки происходят на host docker daemon.
 - __Каталог `/var/jenkins_home/test`__ — это примонтированная директория `../test` из репозитория (примерные пайплайны для Java/Python/Go).
 
-> Чтобы Jenkins мог проверять Quality Gate, в *Manage Jenkins → Configure System → SonarQube servers* добавьте сервер `http://sonarqube:9000` и `Secret text` токен (создаётся в SonarQube → My Account → Tokens). Аналогично создайте credentials для Nexus (`username/password`) и Sonar (`secret text`) через *Manage Credentials*.
+> Для работы `waitForQualityGate` необходимо в *Manage Jenkins → Configure System → SonarQube servers* добавить сервер `http://sonarqube:9000` и указать `Secret text` токен из SonarQube. Учётные данные для Nexus также создаются через *Manage Credentials*.
 
 ### SonarQube
 
-1. Открой http://localhost:9000, залогинься `admin/admin`, задай новый пароль (если нужно).
-2. Создай токен для Jenkins: *My Account → Security → Generate Tokens*. Скопируй и добавь в Jenkins (см. выше).
-3. Quality Gate и Quality Profile по умолчанию — Sonar way. Можно импортировать свои профили.
+1. Откройте http://localhost:9000, войдите `admin/admin`, при необходимости смените пароль.
+2. Создайте токен для Jenkins: *My Account → Security → Generate Tokens*.
+3. Quality Gate и Quality Profile по умолчанию — Sonar way; при необходимости импортируйте свои профили.
 
 ### Nexus Repository
 
-1. http://localhost:8081 → `admin/admin123`.
-2. Создай Docker hosted репозиторий (например, `docker-hosted`, HTTP port 8082). При желании раскомментируй порт в compose (`# - "8082:8082"`).
-3. В Jenkins добавь credentials `nexus-credentials` (`usernamePassword`) и используй в пайплайнах.
-4. Если пушишь по HTTP, не забудь настроить `insecure-registries` (см. Требования).
+1. Перейдите на http://localhost:8081 (`admin/admin123`).
+2. Создайте Docker hosted репозиторий (например, `docker-hosted`, HTTP port 8082) и при необходимости раскомментируйте порт в compose.
+3. Добавьте в Jenkins credentials `nexus-credentials` (`Username with password`) и используйте в пайплайнах.
+4. Убедитесь, что Docker daemon допускает insecure registry (см. Требования).
 
 Проверка логина:
 
@@ -95,12 +92,11 @@ docker login localhost:8082 -u admin -p admin123
 
 ## Обновление конфигурации
 
-- **Плагины**: редактируй `plugins.txt` и пересобирай Jenkins образ: `docker compose build jenkins && docker compose up -d jenkins`.
-- __Init‑скрипт__: любые правки в `jenkins-init.groovy` применяются только при пустом `jenkins_home` volume. Чтобы переинициализировать, удали volume: `docker compose down -v && docker compose up -d`.
-- __Версии инструментов__ задаются в `Dockerfile.jenkins` через ARG (MAVEN_VERSION, GRADLE_VERSION, NODE_VERSION, GO_VERSION).
+- **Плагины Jenkins**: измените `plugins.txt`, затем пересоберите образ `docker compose build jenkins && docker compose up -d jenkins`.
+- __Init‑скрипт__: правки в `jenkins-init.groovy` применяются только при пустом volume `jenkins_home`. Для переинициализации выполните `docker compose down -v && docker compose up -d`.
+- __Версии инструментов__: управляются через ARG в `Dockerfile.jenkins` (MAVEN_VERSION, GRADLE_VERSION, NODE_VERSION, GO_VERSION).
 
 ## Troubleshooting
 
-- **Docker push в Nexus отдаёт 401** — включи в Nexus realm *Docker Bearer Token Realm* (Administration → Security → Realms) и перезапусти логин.
-- **Push по HTTP ругается на SSL** — добавь registry в `insecure-registries` (см. выше).
-
+- **Docker push в Nexus возвращает 401** — активируйте в Nexus realm *Docker Bearer Token Realm* (Administration → Security → Realms).
+- **Push по HTTP завершается ошибкой SSL** — убедитесь, что registry добавлен в `insecure-registries`.
